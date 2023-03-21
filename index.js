@@ -1,41 +1,193 @@
-function Game () {
+function Game() {
   this.game_settings = {
     // delay - задержка между нанесением атаки, max-health - максимальное здоровье, damage - наносимый урон
     // почему игрок называется client? потому что вдруг в перспективе нужно будет прикрутить онлайн
     _client_damage: 10,
     _client_max_health: 100,
-    _client_attack_delay: 0.1,
+    _client_attack_delay: 0.2,
     _bot_damage: 10,
     _bot_max_health: 100,
-    _bot_attack_delay: 0.2
+    _bot_attack_delay: 0.3,
+    _potion_count: 10,
+    _potion_health: 10,
+    _weapon_count: 2,
+    _weapon_damage: 25,
+    _weapon_attack_delay: 0.1,
   };
   this.game_info = {
-    map: [],
-    status: -1, // 1 - игра идет, 0 - игра приостановлена, -1 игра не началась
-    bots: [],
-    clients: [],
-    props: []
+    map: [], field: {
+      el: document.querySelector('.field'), settings: {}
+    }, status: -1, // 1 - игра идет, 0 - игра приостановлена, -1 игра не началась
+    player: null, bots: [], clients: [], potions: [], weapons: []
   };
 }
-Game.prototype.init = function (){
+
+Game.prototype.init = function () {
   console.log("Game initiated");
   console.log(this);
-  document.addEventListener('keyup',(event)=>{
-    // console.log(event)
-    if(event.keyCode == 27){
-      if(this.game_info.status == 0) this.continue();
-      else if(this.game_info.status == 1) this.pause();
+  document.addEventListener('keyup', (event) => {
+    if (event.keyCode == 27 && this.game_info.status != -1) {
+      if (this.game_info.status == 0) this.continue(); else if (this.game_info.status == 1) this.pause();
+    }
+    if (this.game_info.player && this.game_info.status == 1) {
+      if (event.keyCode == 87) {
+        this.game_info.player.move("top")
+      }
+      if (event.keyCode == 65) {
+        this.game_info.player.move("left")
+      }
+      if (event.keyCode == 83) {
+        this.game_info.player.move("bottom")
+      }
+      if (event.keyCode == 68) {
+        this.game_info.player.move("right")
+      }
+      if (event.keyCode == 32) {
+        this.game_info.player.attack()
+      }
     }
   })
+  window.addEventListener("resize", () => {
+    if (game.game_info.status != -1) {
+      this.clearMap()
+      this.generateMap()
+      this.renderMap()
+    }
+  })
+  document.querySelector('.pause-overlay').addEventListener("click", () => {
+    game.continue()
+  })
+  document.querySelector('.start-overlay').addEventListener("click", () => {
+    game.start()
+  })
 }
-Game.prototype.pause = function (){
+Game.prototype.pause = function () {
   console.log("Game paused");
   this.game_info.status = 0;
+  this.game_info.field.el.classList.remove('start')
+  this.game_info.field.el.classList.toggle('pause', true)
 }
-Game.prototype.continue = function (){
+Game.prototype.start = function () {
+  console.log("Game started");
+  this.game_info.status = 1;
+  this.game_info.field.el.classList.remove('start', 'pause')
+  game.generateMap()
+  this.renderMap()
+}
+Game.prototype.continue = function () {
   console.log("Game continue");
   this.game_info.status = 1;
+  this.game_info.field.el.classList.remove('start', 'pause')
 }
+Game.prototype.end = function () {
+  console.log("Game end");
+  this.game_info.status = -1;
+  this.game_info.field.el.classList.remove('pause')
+  this.game_info.field.el.classList.toggle('start', true)
+  game.clearMap()
+}
+Game.prototype.generateMap = function () {
+  console.log("Game generate map");
+  clearInterval(game.game_info.interval)
+  this.game_info.map = []
+  game.game_info.bots = []
+  game.game_info.clients = []
+  game.game_info.potions = []
+  game.game_info.weapons = []
+  this.game_info.field.settings.x = this.game_info.field.el.clientWidth;
+  this.game_info.field.settings.y = this.game_info.field.el.clientHeight;
+  this.game_info.field.settings.tile = 50;
+  let index = 0
+  for (let i = 0; i < Math.floor(this.game_info.field.settings.x / this.game_info.field.settings.tile); i++) {
+    let row = [];
+    for (let j = 0; j < Math.floor(this.game_info.field.settings.y / this.game_info.field.settings.tile); j++) {
+      row.push({
+        class: "tileW", index: index
+      })
+      index++
+    }
+    this.game_info.map.push(row)
+  }
+  // horizontal lines
+  for (let i = 0; i < Math.floor(Math.random() * 2 + 3); i++) {
+    let line = Math.floor(Math.random() * this.game_info.map[0].length)
+    for (let i = 0; i < this.game_info.map.length; i++) {
+      for (let j = 0; j < this.game_info.map[i].length; j++) {
+        this.game_info.map[i][line].class = "tile"
+      }
+    }
+  }
+  // vertical lines
+  for (let i = 0; i < Math.floor(Math.random() * 2 + 3); i++) {
+    let line = Math.floor(Math.random() * this.game_info.map.length)
+    for (let i = 0; i < this.game_info.map.length; i++) {
+      for (let j = 0; j < this.game_info.map[i].length; j++) {
+        this.game_info.map[line][j].class = "tile"
+      }
+    }
+  }
+  // room
+  for (let i = 0; i < Math.floor(Math.random() * 5 + 5); i++) {
+    const x = Math.floor(Math.random() * this.game_info.map[0].length),
+      y = Math.floor(Math.random() * this.game_info.map.length),
+      xMax = x + Math.floor(Math.random() * 5 + 3),
+      yMax = y + Math.floor(Math.random() * 5 + 3)
+
+    for (let j = 0; j < this.game_info.map.length; j++) {
+      for (let k = 0; k < this.game_info.map[j].length; k++) {
+        if ((k > x && k < xMax) || (j > y && j < yMax)) {
+          this.game_info.map[j][k].class = "tile"
+        }
+      }
+    }
+  }
+  // potions
+  for (let i = 0; i < game.game_settings._potion_count; i++) {
+    const potion = new Potion("Зелье лечения", game.game_settings._potion_health)
+    potion.spawn()
+    game.game_info.potions.push(potion)
+  }
+  // weapons
+  for (let i = 0; i < game.game_settings._weapon_count; i++) {
+    const weapon = new Weapon("Меч", game.game_settings._weapon_damage, game.game_settings._weapon_attack_delay)
+    weapon.spawn()
+    game.game_info.weapons.push(weapon)
+  }
+  // bot
+  for (let i = 0; i < 10; i++) {
+    const bot = new Bot()
+    bot.create()
+    bot.spawn()
+  }
+  game.game_info.player = new Client()
+  game.game_info.player.create()
+  game.game_info.player.spawn()
+  game.game_info.interval = setInterval(function () {
+    for (let i = 0; i < game.game_info.bots.length; i++) {
+      const rnd = Math.floor(Math.random() * 4)
+      if (rnd == 1) game.game_info.bots[i].move("top");
+      else if (rnd == 2) game.game_info.bots[i].move("left");
+      else if (rnd == 3) game.game_info.bots[i].move("bottom");
+      else if (rnd == 4) game.game_info.bots[i].move("right");
+    }
+  }, 2000)
+}
+Game.prototype.clearMap = function () {
+  this.game_info.field.el.innerHTML = ""
+}
+Game.prototype.renderMap = function () {
+  game.clearMap()
+  for (let i = 0; i < this.game_info.map.length; i++) {
+    for (let j = 0; j < this.game_info.map[i].length; j++) {
+      const tile = document.createElement("div")
+      tile.classList.add('tile', this.game_info.map[i][j].class)
+      tile.style.top = `${(j) * 50}px`
+      tile.style.left = `${(i) * 50}px`
+      if (this.game_info.map[i][j].innerEl) this.game_info.field.el.appendChild(tile).appendChild(this.game_info.map[i][j].innerEl); else this.game_info.field.el.appendChild(tile)
+    }
+  }
+}
+
 /**
  * Client class.
  *
@@ -44,19 +196,109 @@ Game.prototype.continue = function (){
  * @param {Number} damage  - наносимый урон
  * @param {Number} attack_delay  - задержка атаки
  */
-function Client (
-  health = game.game_settings._client_max_health,
-  damage = game.game_settings._client_damage,
-  attack_delay = game.game_settings._client_attack_delay
-){
+function Client(health = game.game_settings._client_max_health, damage = game.game_settings._client_damage, attack_delay = game.game_settings._client_attack_delay) {
   this.health = health;
   this.damage = damage;
   this.attack_delay = attack_delay;
 }
-Client.prototype.create = function (){
+
+Client.prototype.create = function () {
+  console.log("Client created")
+  game.game_info.clients.push(this)
 }
-Client.prototype.spawn = function (){
+Client.prototype.spawn = function () {
+  console.log("Client spawned")
+  let emptyTiles = []
+  game.game_info.map.map(row => {
+    emptyTiles.push(...row.filter(tile => tile.class == "tile"))
+  })
+  const chosenTile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
+  game.game_info.map.map(row => {
+    if (row.find(tile => tile.index == chosenTile.index)) {
+      row = row.map(tile => {
+        if (tile.index == chosenTile.index) {
+          tile.class = "tileP"
+          let health = document.createElement("div")
+          health.classList.add("health")
+          health.style.width = `${40 / game.game_settings._client_max_health * this.health}px`
+          tile.innerEl = health
+        }
+        return tile
+      })
+    }
+    return row
+  })
 }
+Client.prototype.attack = function () {
+  console.log("Client attack")
+}
+Client.prototype.move = function (type = "top") {
+  let clientX = 0, clientY = 0;
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (game.game_info.map[i][j].class == "tileP") {
+        clientX = j
+        clientY = i
+      }
+    }
+  }
+  switch (type) {
+    case "top": {
+      if (game.game_info.map[clientY][clientX - 1] && (game.game_info.map[clientY][clientX - 1].class == "tile" || game.game_info.map[clientY][clientX - 1].class == "tileHP" || game.game_info.map[clientY][clientX - 1].class == "tileSW")) {
+        if (game.game_info.map[clientY][clientX - 1].class == "tileHP") game.game_info.player.health = game.game_info.player.health + game.game_settings._potion_health > game.game_settings._client_max_health ? game.game_settings._client_max_health : game.game_info.player.health + game.game_settings._potion_health; else if (game.game_info.map[clientY][clientX - 1].class == "tileSW") game.game_info.player.damage = game.game_info.player.damage + game.game_settings._weapon_damage
+        game.game_info.map[clientY][clientX - 1].class = "tileP"
+        game.game_info.map[clientY][clientX].innerEl.style.width = `${40 / game.game_settings._client_max_health * game.game_info.player.health}px`
+        game.game_info.map[clientY][clientX - 1].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+        console.log("Client move", type)
+      }
+      break;
+    }
+    case "right": {
+      if (game.game_info.map[clientY + 1] && (game.game_info.map[clientY + 1][clientX].class == "tile" || game.game_info.map[clientY + 1][clientX].class == "tileHP" || game.game_info.map[clientY + 1][clientX].class == "tileSW")) {
+        if (game.game_info.map[clientY + 1][clientX].class == "tileHP") game.game_info.player.health = game.game_info.player.health + game.game_settings._potion_health > game.game_settings._client_max_health ? game.game_settings._client_max_health : game.game_info.player.health + game.game_settings._potion_health; else if (game.game_info.map[clientY + 1][clientX].class == "tileSW") game.game_info.player.damage = game.game_info.player.damage + game.game_settings._weapon_damage
+        game.game_info.map[clientY + 1][clientX].class = "tileP"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX].innerEl.style.width = `${40 / game.game_settings._client_max_health * game.game_info.player.health}px`
+        game.game_info.map[clientY + 1][clientX].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+        console.log("Client move", type)
+      }
+      break;
+    }
+    case "bottom": {
+      if (game.game_info.map[clientY][clientX + 1] && (game.game_info.map[clientY][clientX + 1].class == "tile" || game.game_info.map[clientY][clientX + 1].class == "tileHP" || game.game_info.map[clientY][clientX + 1].class == "tileSW")) {
+        if (game.game_info.map[clientY][clientX + 1].class == "tileHP") game.game_info.player.health = game.game_info.player.health + game.game_settings._potion_health > game.game_settings._client_max_health ? game.game_settings._client_max_health : game.game_info.player.health + game.game_settings._potion_health; else if (game.game_info.map[clientY][clientX + 1].class == "tileSW") game.game_info.player.damage = game.game_info.player.damage + game.game_settings._weapon_damage
+        game.game_info.map[clientY][clientX + 1].class = "tileP"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX].innerEl.style.width = `${40 / game.game_settings._client_max_health * game.game_info.player.health}px`
+        game.game_info.map[clientY][clientX + 1].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+        console.log("Client move", type)
+      }
+      break;
+    }
+    case "left": {
+      if (game.game_info.map[clientY - 1] && (game.game_info.map[clientY - 1][clientX].class == "tile" || game.game_info.map[clientY - 1][clientX].class == "tileHP" || game.game_info.map[clientY - 1][clientX].class == "tileSW")) {
+        if (game.game_info.map[clientY - 1][clientX].class == "tileHP") game.game_info.player.health = game.game_info.player.health + game.game_settings._potion_health > game.game_settings._client_max_health ? game.game_settings._client_max_health : game.game_info.player.health + game.game_settings._potion_health; else if (game.game_info.map[clientY - 1][clientX].class == "tileSW") game.game_info.player.damage = game.game_info.player.damage + game.game_settings._weapon_damage
+        game.game_info.map[clientY - 1][clientX].class = "tileP"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX].innerEl.style.width = `${40 / game.game_settings._client_max_health * game.game_info.player.health}px`
+        game.game_info.map[clientY - 1][clientX].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+        console.log("Client move", type)
+      }
+      break;
+    }
+  }
+  // game.game_info.map
+}
+
 /**
  * Bot class.
  *
@@ -65,61 +307,161 @@ Client.prototype.spawn = function (){
  * @param {Number} damage  - наносимый урон
  * @param {Number} attack_delay  - задержка атаки
  */
-function Bot (
-  health = game.game_settings._bot_max_health,
-  damage = game.game_settings._bot_damage,
-  attack_delay = game.game_settings._bot_attack_delay
-){
+function Bot(health = game.game_settings._bot_max_health, damage = game.game_settings._bot_damage, attack_delay = game.game_settings._bot_attack_delay) {
   this.health = health;
   this.damage = damage;
   this.attack_delay = attack_delay;
+  this.index = null
 }
-Bot.prototype.create = function (){
+
+Bot.prototype.create = function () {
+  console.log("Bot created")
+  game.game_info.bots.push(this)
 }
-Bot.prototype.spawn = function (){
+Bot.prototype.attack = function () {
+  console.log("Bot attack")
 }
-/**
- * Prop class.
- *
- * @constructor
- * @param {String} name - имя предмета
- */
-function Prop (name){
-  this.name = name;
+Bot.prototype.spawn = function () {
+  console.log("Bot spawned")
+  let emptyTiles = []
+  game.game_info.map.map(row => {
+    emptyTiles.push(...row.filter(tile => tile.class == "tile"))
+  })
+  const chosenTile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
+  game.game_info.map.map(row => {
+    if (row.find(tile => tile.index == chosenTile.index)) {
+      row = row.map(tile => {
+        if (tile.index == chosenTile.index) {
+          this.index = tile.index
+          tile.class = "tileE"
+          let health = document.createElement("div")
+          health.classList.add("health")
+          health.style.width = `${40 / game.game_settings._bot_max_health * this.health}px`
+          tile.innerEl = health
+        }
+        return tile
+      })
+    }
+    return row
+  })
 }
-Prop.prototype.create = function (){
+Bot.prototype.move = function (type = "top") {
+  let clientX = 0, clientY = 0;
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (game.game_info.map[i][j].index == this.index) {
+        clientX = j
+        clientY = i
+      }
+    }
+  }
+  switch (type) {
+    case "top": {
+      if (game.game_info.map[clientY][clientX - 1] && game.game_info.map[clientY][clientX - 1].class == "tile") {
+        this.index = game.game_info.map[clientY][clientX - 1].index
+        game.game_info.map[clientY][clientX - 1].class = "tileE"
+        game.game_info.map[clientY][clientX - 1].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+      }
+      break;
+    }
+    case "right": {
+      if (game.game_info.map[clientY + 1] && game.game_info.map[clientY + 1][clientX].class == "tile") {
+        this.index = game.game_info.map[clientY + 1][clientX].index
+        game.game_info.map[clientY + 1][clientX].class = "tileE"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY + 1][clientX].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+      }
+      break;
+    }
+    case "bottom": {
+      if (game.game_info.map[clientY][clientX + 1] && game.game_info.map[clientY][clientX + 1].class == "tile") {
+        this.index = game.game_info.map[clientY][clientX + 1].index
+        game.game_info.map[clientY][clientX + 1].class = "tileE"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY][clientX + 1].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+      }
+      break;
+    }
+    case "left": {
+      if (game.game_info.map[clientY - 1] && game.game_info.map[clientY - 1][clientX].class == "tile") {
+        this.index = game.game_info.map[clientY - 1][clientX].index
+        game.game_info.map[clientY - 1][clientX].class = "tileE"
+        game.game_info.map[clientY][clientX].class = "tile"
+        game.game_info.map[clientY - 1][clientX].innerEl = game.game_info.map[clientY][clientX].innerEl
+        game.game_info.map[clientY][clientX].innerEl = undefined
+        game.renderMap()
+      }
+      break;
+    }
+  }
+  // game.game_info.map
 }
-Prop.prototype.spawn = function (){
-}
+
 /**
  * Weapon class.
  *
  * @constructor
- * @param {Class} parent - родитель оружия
  * @param {String} name - имя оружия
  * @param {Number} damage - урон оружия
  * @param {Number} attack_delay - задержка атаки оружия
  */
-function Weapon (parent,name,damage, attack_delay){
-  Prop.call(this, name);
+function Weapon(name, damage, attack_delay) {
   this.damage = damage;
   this.attack_delay = attack_delay;
-  this._parent = parent;
 }
-Weapon.prototype = Object.create(Prop.prototype);
-Weapon.prototype.constructor = Weapon;
+
+Weapon.prototype.spawn = function () {
+  let emptyTiles = []
+  game.game_info.map.map(row => {
+    emptyTiles.push(...row.filter(tile => tile.class == "tile"))
+  })
+  const chosenTile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
+  game.game_info.map.map(row => {
+    if (row.find(tile => tile.index == chosenTile.index)) {
+      row = row.map(tile => {
+        if (tile.index == chosenTile.index) {
+          tile.class = "tileSW"
+        }
+        return tile
+      })
+    }
+    return row
+  })
+}
+
 /**
  * Potion class.
  *
- * @constructor
- * @param {Class} parent - родитель зелья
+ * @constructo
  * @param {String} name - имя зелья
  * @param {Number} healing - лечение зелья
  */
-function Potion (parent,name, healing){
-  Prop.call(this, name);
+function Potion(name, healing) {
   this.healing = healing;
-  this._parent = parent;
 }
-Potion.prototype = Object.create(Prop.prototype);
-Potion.prototype.constructor = Potion;
+
+Potion.prototype.spawn = function () {
+  let emptyTiles = []
+  game.game_info.map.map(row => {
+    emptyTiles.push(...row.filter(tile => tile.class == "tile"))
+  })
+  const chosenTile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
+  game.game_info.map.map(row => {
+    if (row.find(tile => tile.index == chosenTile.index)) {
+      row = row.map(tile => {
+        if (tile.index == chosenTile.index) {
+          tile.class = "tileHP"
+        }
+        return tile
+      })
+    }
+    return row
+  })
+}
