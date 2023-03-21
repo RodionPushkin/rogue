@@ -1,18 +1,15 @@
 function Game() {
   this.game_settings = {
-    // delay - задержка между нанесением атаки, max-health - максимальное здоровье, damage - наносимый урон
+    // max-health - максимальное здоровье, damage - наносимый урон
     // почему игрок называется client? потому что вдруг в перспективе нужно будет прикрутить онлайн
     _client_damage: 10,
     _client_max_health: 100,
-    _client_attack_delay: 0.2,
     _bot_damage: 10,
     _bot_max_health: 100,
-    _bot_attack_delay: 0.3,
     _potion_count: 10,
     _potion_health: 10,
     _weapon_count: 2,
-    _weapon_damage: 25,
-    _weapon_attack_delay: 0.1,
+    _weapon_damage: 10,
   };
   this.game_info = {
     map: [], field: {
@@ -82,6 +79,13 @@ Game.prototype.continue = function () {
 Game.prototype.end = function () {
   console.log("Game end");
   this.game_info.status = -1;
+  clearInterval(game.game_info.interval)
+  clearInterval(game.game_info.bot_damage_interval)
+  this.game_info.map = []
+  game.game_info.bots = []
+  game.game_info.clients = []
+  game.game_info.potions = []
+  game.game_info.weapons = []
   this.game_info.field.el.classList.remove('pause')
   this.game_info.field.el.classList.toggle('start', true)
   game.clearMap()
@@ -89,6 +93,7 @@ Game.prototype.end = function () {
 Game.prototype.generateMap = function () {
   console.log("Game generate map");
   clearInterval(game.game_info.interval)
+  clearInterval(game.game_info.bot_damage_interval)
   this.game_info.map = []
   game.game_info.bots = []
   game.game_info.clients = []
@@ -164,19 +169,28 @@ Game.prototype.generateMap = function () {
   game.game_info.player.spawn()
   game.game_info.interval = setInterval(function () {
     for (let i = 0; i < game.game_info.bots.length; i++) {
-      const rnd = Math.floor(Math.random() * 4)
-      if (rnd == 1) game.game_info.bots[i].move("top");
-      else if (rnd == 2) game.game_info.bots[i].move("left");
-      else if (rnd == 3) game.game_info.bots[i].move("bottom");
-      else if (rnd == 4) game.game_info.bots[i].move("right");
+      const rnd = Math.floor(Math.random() * 100)
+      if (rnd < 25) game.game_info.bots[i].move("top");
+      else if (rnd >= 25 && rnd < 50) game.game_info.bots[i].move("left");
+      else if (rnd >= 50 && rnd < 75) game.game_info.bots[i].move("bottom");
+      else if (rnd >= 75) game.game_info.bots[i].move("right");
     }
-  }, 2000)
+  }, 800)
+  game.game_info.bot_damage_interval = setInterval(function () {
+    for (let i = 0; i < game.game_info.bots.length; i++) {
+      game.game_info.bots[i].attack()
+    }
+  }, 500)
 }
 Game.prototype.clearMap = function () {
   this.game_info.field.el.innerHTML = ""
 }
 Game.prototype.renderMap = function () {
   game.clearMap()
+  if (game.game_info.bots.length == 0 || game.game_info.player.health <= 0) {
+    game.end()
+    return
+  }
   for (let i = 0; i < this.game_info.map.length; i++) {
     for (let j = 0; j < this.game_info.map[i].length; j++) {
       const tile = document.createElement("div")
@@ -194,12 +208,10 @@ Game.prototype.renderMap = function () {
  * @constructor
  * @param {Number} health - здоровье
  * @param {Number} damage  - наносимый урон
- * @param {Number} attack_delay  - задержка атаки
  */
-function Client(health = game.game_settings._client_max_health, damage = game.game_settings._client_damage, attack_delay = game.game_settings._client_attack_delay) {
+function Client(health = game.game_settings._client_max_health, damage = game.game_settings._client_damage) {
   this.health = health;
   this.damage = damage;
-  this.attack_delay = attack_delay;
 }
 
 Client.prototype.create = function () {
@@ -231,6 +243,67 @@ Client.prototype.spawn = function () {
 }
 Client.prototype.attack = function () {
   console.log("Client attack")
+  let clientX = 0, clientY = 0;
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (game.game_info.map[i][j].class == "tileP") {
+        clientX = j
+        clientY = i
+      }
+    }
+  }
+  const damageBox = [
+    // {
+    //   x: clientX+1,
+    //   y: clientY-1,
+    // },
+    {
+      x: clientX + 1,
+      y: clientY,
+    },
+    // {
+    //   x: clientX+1,
+    //   y: clientY+1,
+    // },
+    {
+      x: clientX,
+      y: clientY - 1,
+    },
+    {
+      x: clientX,
+      y: clientY + 1,
+    },
+    // {
+    //   x: clientX-1,
+    //   y: clientY-1,
+    // },
+    {
+      x: clientX - 1,
+      y: clientY,
+    },
+    // {
+    //   x: clientX-1,
+    //   y: clientY+1,
+    // }
+  ]
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (damageBox.find(box => box.x == j && box.y == i) && game.game_info.bots.find(bot => bot.index == game.game_info.map[i][j].index)) {
+        for (let k = 0; k < game.game_info.bots.length; k++) {
+          if (game.game_info.bots[k].index == game.game_info.map[i][j].index) {
+            game.game_info.bots[k].health -= game.game_info.player.damage
+            game.game_info.map[i][j].innerEl.style.width = `${40 / game.game_settings._bot_max_health * game.game_info.bots[k].health}px`
+            if (game.game_info.bots[k].health <= 0) {
+              game.game_info.bots.splice(k, 1)
+              game.game_info.map[i][j].class = "tile"
+              game.game_info.map[i][j].innerEl = null
+            }
+          }
+        }
+      }
+    }
+  }
+  game.renderMap()
 }
 Client.prototype.move = function (type = "top") {
   let clientX = 0, clientY = 0;
@@ -305,12 +378,10 @@ Client.prototype.move = function (type = "top") {
  * @constructor
  * @param {Number} health - здоровье
  * @param {Number} damage  - наносимый урон
- * @param {Number} attack_delay  - задержка атаки
  */
-function Bot(health = game.game_settings._bot_max_health, damage = game.game_settings._bot_damage, attack_delay = game.game_settings._bot_attack_delay) {
+function Bot(health = game.game_settings._bot_max_health, damage = game.game_settings._bot_damage) {
   this.health = health;
   this.damage = damage;
-  this.attack_delay = attack_delay;
   this.index = null
 }
 
@@ -319,7 +390,58 @@ Bot.prototype.create = function () {
   game.game_info.bots.push(this)
 }
 Bot.prototype.attack = function () {
-  console.log("Bot attack")
+  let clientX = 0, clientY = 0;
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (game.game_info.map[i][j].index == this.index) {
+        clientX = j
+        clientY = i
+      }
+    }
+  }
+  const damageBox = [
+    {
+      x: clientX + 1,
+      y: clientY - 1,
+    },
+    {
+      x: clientX + 1,
+      y: clientY,
+    },
+    {
+      x: clientX + 1,
+      y: clientY + 1,
+    },
+    {
+      x: clientX,
+      y: clientY - 1,
+    },
+    {
+      x: clientX,
+      y: clientY + 1,
+    },
+    {
+      x: clientX - 1,
+      y: clientY - 1,
+    },
+    {
+      x: clientX - 1,
+      y: clientY,
+    },
+    {
+      x: clientX - 1,
+      y: clientY + 1,
+    }
+  ]
+  for (let i = 0; i < game.game_info.map.length; i++) {
+    for (let j = 0; j < game.game_info.map[i].length; j++) {
+      if (damageBox.find(box => box.x == j && box.y == i) && game.game_info.map[i][j].class == "tileP") {
+        console.log(game.game_info.player.health,this.damage)
+        game.game_info.player.health -= this.damage
+      }
+    }
+  }
+  game.renderMap()
 }
 Bot.prototype.spawn = function () {
   console.log("Bot spawned")
@@ -401,7 +523,6 @@ Bot.prototype.move = function (type = "top") {
       break;
     }
   }
-  // game.game_info.map
 }
 
 /**
@@ -410,11 +531,9 @@ Bot.prototype.move = function (type = "top") {
  * @constructor
  * @param {String} name - имя оружия
  * @param {Number} damage - урон оружия
- * @param {Number} attack_delay - задержка атаки оружия
  */
-function Weapon(name, damage, attack_delay) {
+function Weapon(name, damage) {
   this.damage = damage;
-  this.attack_delay = attack_delay;
 }
 
 Weapon.prototype.spawn = function () {
